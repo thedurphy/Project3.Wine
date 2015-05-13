@@ -1,0 +1,15 @@
+base
+GGally
+scales
+lattice
+MASS
+memisc
+car
+reshape
+plyr
+ggplot2
+knitr
+corrplot
+gridExtra
+nlme
+mgcv

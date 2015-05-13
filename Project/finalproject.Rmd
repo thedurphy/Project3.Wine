@@ -1,0 +1,251 @@
+---
+title: "Wine Quality Exploration"
+author: "Miadad Rashid"
+date: "Tuesday, May 05, 2015"
+output: html_document
+---
+
+Table of Contents
+
+1. [Introduction](#intro)
+2. [Exploration](#exploration)
+    1. [General Statistics](#exploration.gen)
+    2. [Quality Distributions](#exploration.qual)
+    3. [Related Variables (Intuitively)](#exploration.rel)
+    4. [Other Related Variables (Unintuitively)](#exploration.other)
+3. [Conclusion](#conclusion)
+
+```{r, eval=T, echo=FALSE, results='hide', message=FALSE, cache=F}
+setwd("D:/Documents/GitHub/Udacity-DataAnalyst Nanodegree/Datasets/Project")
+set.seed(9486)
+packages <- c('GGally', 'scales', 'memisc', 'lattice', 'MASS', 'car', 'reshape', 'plyr', 'ggplot2', 'scales', 'knitr', 'corrplot', 'gridExtra')
+sapply(packages, require, character.only = T)
+rw <- read.csv('wineQualityReds.csv')
+rw$X <- NULL
+rw$type <- rep('rw', length(rw$quality))
+ww <- read.csv('wineQualityWhites.csv')
+ww$X <- NULL
+ww$type <- rep('ww', length(ww$quality))
+allwines <- rbind(rw, ww)
+eqwines <- rbind(rw, ww[sample(1:nrow(ww), nrow(rw), replace=F),])
+allwines$type <- factor(allwines$type, 
+                        labels = c('Red Wine', 'White Wine'))
+eqwines$type <- factor(eqwines$type, 
+                       labels = c('Red Wine', 'White Wine'))
+
+
+
+nor <- function(x) {
+    (x - min(x))/(max(x) - min(x))
+}
+
+noeq <- data.frame(apply(eqwines[,1:12], 2, nor))
+noeq$quality <- eqwines$quality
+noeq$type <- eqwines$type
+noeq.melt <- melt(noeq, id = c('quality', 'type'))
+noall <- data.frame(apply(allwines[,1:12], 2, nor))
+noall$quality <- allwines$quality
+noall$type <- allwines$type
+noall.melt <- melt(noall, id = c('quality', 'type'))
+
+
+
+```
+
+# 1. Introduction <a name="intro"></a>
+  In the following we will be exploring 2 datasets.  Both data sets document the quality of wine and their associated physiochemical properties.  The data sets are divided into red and white wines.  The grape is the Portugese varietal of *Vinho Verde*.  Documentation of the entire study can be found [here](http://www.sciencedirect.com/science/article/pii/S0167923609001377).  Documentation of the data set and its subsequent variables can be found [here](https://s3.amazonaws.com/udacity-hosted-downloads/ud651/wineQualityInfo.txt).
+  For the purposes of determining patterns in the overall designation of wine, I combined the 2 datasets and added a categorical variable called `type` which denotes whether the particular iteration is `white` or `red` wines.  This should not impede any analysis of the individual `type` of wine but should streamline the analysis of the relationship of quality to the physiochemical properties of the wine varietal in whole.
+  
+  
+# 1. Exploration <a name="exploration"></a>
+
+<a name="exploration.gen"></a>
+
+###1.1 General Statistics 
+
+*Note: After the loading of the datasets, an additional variable, `type`, was added to indicate the type of wine; `Red Wine` for red wine and `White Wine` for white wine.  This was to help identify the type of wine when both datasets were combined.*
+
+  + Red Wine Dimensions
+```{r, echo = F}
+dim(rw)
+```
+  + White Wine Dimensions
+```{r, echo = F}
+dim(ww)
+```
+**Note:  There are considerably more white wine iterations than there are red wine iterations.  This may or may not make a difference when analyzing the 2 datasets as one.  I have created 2 different combinations, 1 data set is a straight combination of the 2 data sets, the other is a combination of the red wine data set AND the white wine data set of which I randomly chose observations from so the number of observations were equal to the red wine data set.  We will be conducting analysis on both so the type of dataset will be denoted in the title as `Equalized` or `Unequal`.**
+  
+  + Variables (both datasets have identical covariates)
+```{r, echo = F}
+colnames(rw)
+```
+*Note: the `X` variable is an index variable and will be removed as it will interfere with the combination of the 2 datasets and is incidentally uneeded.*
+  
+  + Summarizations for Red Wines
+```{r, echo = F}
+summary(rw)
+```
+  + Summarizations for White Wines
+```{r, echo = F}
+summary(ww)
+```
+**When looking at the distributions of the physiochemical properties, you can notice some major outliers on some of the covariates.  Namely, `residual.sugar`, `chlorides`, `sulphates`, and `total.sulfur.dioxide`.  These variables' `max` values are considerably higher than the other parameters while the `mean` and `median` stay within a relatively small range.  If we were to consider this dataset for predictive modeling, it may be beneficial to remove these outliers.  Removing these observations could also increase correlative values between the covariates as well as the `quality` variable.**
+
+<a name = "exploration.qual"></a>
+###1.2 Quality Distributions between Red and White Wines
+
+```{r, echo = F, message = F, fig.width=10, cache = T}
+eqhist <- ggplot(aes(x = quality, fill = type), 
+       data = eqwines) + 
+    geom_histogram(position = 'dodge', binwidth = 1) + 
+    ggtitle('Quality Distribution\nwith Equalized Observations') + 
+    labs(fill = 'Wine Type')
+hist <- ggplot(aes(x = quality, fill = type), 
+       data = allwines) + 
+    geom_histogram(position = 'dodge', binwidth = 1) + 
+    ggtitle('Quality Distribution\nwith Unequal Observations') + 
+    labs(fill = 'Wine Type')
+grid.arrange(hist, eqhist, ncol = 2)
+```
+
+  + Table of Quality (Unequal Observations)
+
+```{r, echo = F}
+print('Red Wines')
+aggregate(allwines$quality, by=list(allwines$type), FUN=table)$x[[1]]
+print('White Wines')
+aggregate(allwines$quality, by=list(allwines$type), FUN=table)$x[[2]]
+```
+
+  + Table of Quality (Equalized Observations)
+
+```{r, echo = F}
+print('Red Wines')
+aggregate(eqwines$quality, by=list(eqwines$type), FUN=table)$x[[1]]
+print('White Wines')
+aggregate(eqwines$quality, by=list(eqwines$type), FUN=table)$x[[2]]
+```
+
+
+**Note: The distributions of the outcome variable, `quality`, seem to be normal.**
+
+<a name = 'exploration.rel'></a>
+
+###1.3 Related Variables (Intuitive Relation)
+
+These variables have known relations to one another and *should* be reflected in the data such as the relation of `pH` to any of the acid variables in the data.  The correlative values should also be significant.
+
+  + Total Acidity to pH
+
+```{r, echo = F, message=F, cache = T}
+ggplot(aes(y = fixed.acidity + volatile.acidity + citric.acid,
+           x = pH, 
+           colour = type), 
+           data = allwines) + 
+    geom_jitter(alpha = 3/10) + 
+    labs(color = "Wine Type") + 
+    ylab('Total Acidity') + 
+    ggtitle('Relationship of pH\nto Total Acidity') + 
+    geom_smooth()
+```
+
+For this particular graph I added all the acid indicating components, `fixed.acidity` + `volatile.acidity` + `citric.acid`, as `Total Acidity` and compared it to the `pH` variable.  If the data is sound, `pH` should have an inverse relationship to `Total Acidity`, and it does.
+
+Another interesting observation is that the rate of change seem to be much less for white wines than it is for red wines.  Considering there is considerably more data for white wines than there is red wines, this simply be a result be a result of lack of red wine observations.  We can deal with this by sampling random iterations of the `White Wines` equal to the iterations of `Red Wines`.'
+
+```{r, echo = F, message = F, cache = F}
+ggplot(aes(y = fixed.acidity + volatile.acidity + citric.acid,
+           x = pH, 
+           colour = type), 
+       data = eqwines) + 
+    geom_jitter(alpha = 3/10) + 
+    labs(color = "Wine Type") + 
+    ylab('Total Acidity') + 
+    ggtitle('Relationship of pH\nto Total Acidity\nEqualized') + 
+    geom_smooth()
+```
+
+Although the areas of red wine vs white wine seems to be more distinct, the red wine rate of change is still more rapid than white wine.
+
+  + Alcohol and Density
+
+Alcohol has less density compared to other consumable liquids, specifically water.  While water has a density of 1 gram per cubic centimeter, alcohol has a density of about 0.79 g/cc, at equal pressure and temperature.  The more alcohol vs other liquids a wine contains should decrease the overall density of the wine.  So a comparison between alcohol level and density should show an inverse relationship.
+
+```{r, echo = F, message = F, cache = T}
+ggplot(aes(y = density,
+           x = alcohol, 
+           color = type), 
+       data = eqwines) + 
+    geom_point() + 
+    geom_smooth() + 
+    labs(color = "Wine Type") + 
+    xlab('Alcohol %') + 
+    ylab('Density (g/cc)') + 
+    ggtitle('Relationship of Alcohol\nto Density\nEqualized')
+```
+
+<a name = 'exploration.other'></a>
+
+###1.4 Related Variables (Unintuitive Relation)
+
+In the previous area, we looked at variables that *should* have correlation, whether negative or positive.  There maybe other variables that have such correlations we may not have intuitively examined.
+
+###Correlation of Variables on the Equalized Data Set
+  
+```{r, echo = F, message = F, cache = T}
+corrplot(cor(eqwines[,1:12]))
+```
+
+  As covered in the previous section, there is a strong correlation between `alcohol` and `density`.  But there were, indeed, some correlated variables that have interesting relationships to one another.
+  
+###`pH` to `volatile.acidity`
+
+```{r, echo = F, message = F, cache = T}
+ggplot(aes(x = pH, y = volatile.acidity, color = type), 
+       data = eqwines) + 
+    geom_jitter() + 
+    labs(color = 'Wine Type') + 
+    ylab('Volatile Acidity') + 
+    ggtitle('pH to \nVolatile Acidity\nEqualized') + 
+    coord_cartesian(xlim = c(min(eqwines$pH), 
+                             quantile(eqwines$pH, 0.99)),
+                     ylim = c(min(eqwines$volatile.acidity), 
+                              quantile(eqwines$volatile.acidity, 0.99))) + 
+  geom_smooth()
+```
+
+
+  Although the `pH` to `fixed.acidity` and `citric.acid` seem to have a negative correlation, as expected, `ph` seems to also have a positive correlation with `volatile.acidity`.  This was unexpected since acidic compounds encompass the lower numbers in the `ph` scale.  Doing further research, I have found that `volatile.acidity` in the documentation is also known as acetic acid.  Acetic acid is considered a weak acid, and one of two weak acids.  Weak acids are categorized as such because they simultaneously contain their conjugate base, higher pH, and acidic parts in one solution.  More information can be found [here](http://en.wikipedia.org/wiki/Acid_strength).  This could possibly explain the positive correlation between `pH` and `volatile.acidity`.  
+  
+###`density` to `fixed.acidity`
+  
+```{r, echo = F, message = F, chache = T}
+ggplot(aes(x = density, y = fixed.acidity, color = type),
+       data = eqwines) + 
+    geom_point() + 
+    labs(color = 'Wine Type') + 
+    xlab('Density') + 
+    ylab('Fixed Acidity') + 
+    ggtitle('Density to\nFixed Acidity\nEqualized') + 
+    geom_smooth()
+```
+  
+  Another high correlation is between `density` and `fixed.acidity`.  The three prime acids found in wine are **tartaric acid**, **malic acid**, and **citric acid**.  When looking at the densities of these acids we find that...
+  
+  + tartaric acid : 1.79 g/cm^3
+  + malic acid : 1.61 g/cm^3
+  + citric acid : 1.67 g/cm^3
+  
+All of these acids have a higher density than water, which has a density of 1.0 g/cm^3.  We are left to conclude that the higher the acid concentration in a given compound relative to water, the more dense it becomes, with all else being equal.
+
+```{r, echo = F, cache = T, fig.width = 10, fig.height = 10}
+ggplot(aes(x = quality, y = value, color = type),
+       data = noeq.melt) + 
+    geom_jitter() + 
+    facet_wrap(~variable) + 
+    labs(color = 'Wine Type') + 
+    ggtitle('Quality Relationship to\nthe Variables\nEqualized') + 
+    scale_x_continuous(breaks = seq(0, max(noall.melt$quality), 1)) + 
+    xlab('Quality Level') + 
+    ylab('Normalized Value')
+```
