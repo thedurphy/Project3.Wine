@@ -11,5 +11,6 @@ ggplot2
 knitr
 corrplot
 gridExtra
+plotrix
 nlme
 mgcv

@@ -1,7 +1,7 @@
 ---
 title: "Wine Quality Exploration"
 author: "Miadad Rashid"
-date: "Tuesday, May 05, 2015"
+date: "Tuesday, May 17, 2015"
 output: html_document
 ---
 
@@ -11,48 +11,90 @@ Table of Contents
 2. [Exploration](#exploration)
     1. [General Statistics](#exploration.gen)
     2. [Quality Distributions](#exploration.qual)
-    3. [Related Variables (Intuitively)](#exploration.rel)
-    4. [Other Related Variables (Unintuitively)](#exploration.other)
+    3. [Related Variables (Intuitive Relation)](#exploration.rel)
+    4. [Other Related Variables (Unintuitive Relation)](#exploration.other)
+    5. [The Outcome Variable -- Quality](#exploration.out)
 3. [Conclusion](#conclusion)
+    1. [Final Plots](#conclusion.plots)
+    2. [Summary](#conclusion.sum)
 
 ```{r, eval=T, echo=FALSE, results='hide', message=FALSE, cache=F}
-setwd("D:/Documents/GitHub/Udacity-DataAnalyst Nanodegree/Datasets/Project")
+setwd("~/Project3.Wine/Project")
+# Setting seed for reproducibility
 set.seed(9486)
-packages <- c('GGally', 'scales', 'memisc', 'lattice', 'MASS', 'car', 'reshape', 'plyr', 'ggplot2', 'scales', 'knitr', 'corrplot', 'gridExtra')
+# Packages that will be used
+packages <- c('GGally', 'scales', 'memisc', 'lattice', 
+              'MASS', 'car', 'reshape', 'plyr', 'ggplot2',
+              'scales', 'knitr', 'corrplot', 'gridExtra',
+              'plotrix')
+# loading all the packages
 sapply(packages, require, character.only = T)
+
+# Loading the datasets and removing index variables
 rw <- read.csv('wineQualityReds.csv')
 rw$X <- NULL
-rw$type <- rep('rw', length(rw$quality))
 ww <- read.csv('wineQualityWhites.csv')
 ww$X <- NULL
-ww$type <- rep('ww', length(ww$quality))
+
+#Creating a vector of the wine types
+rw$type <- rep('Red Wine', length(rw$quality))
+ww$type <- rep('White Wine', length(ww$quality))
+
+# Creating a combined dataset of both wine types
 allwines <- rbind(rw, ww)
-eqwines <- rbind(rw, ww[sample(1:nrow(ww), nrow(rw), replace=F),])
-allwines$type <- factor(allwines$type, 
-                        labels = c('Red Wine', 'White Wine'))
-eqwines$type <- factor(eqwines$type, 
-                       labels = c('Red Wine', 'White Wine'))
+
+# Creating a combined dataset where both wines are equally represented
+# Choice of the White Wines were done in random and can be
+# reproduced by the seed number
+eqwines <- rbind(rw, 
+                 ww[sample(1:nrow(ww), nrow(rw), replace=F),])
 
 
 
+# Melting the dataset by wine quality and type
+# in order to create faceted plots
+eq.melt <- melt(eqwines, id = c('quality', 'type'))
+
+# Creating a vector of tidier names to replace with
+nvar <- c('Fixed Acidity', 'Volatile Acidity', 'Citric Acid', 
+          'Residual Sugar', 'Chlorides', 
+          'Free Sulfur Dioxide', 
+          'Total Sulfur Dioxide', 'Density', 'pH', 
+          'Sulphates', 'Alcohol')
+
+# replacing the original variables with the tidier ones
+eq.melt$variable <- factor(eq.melt$variable,
+                           labels = nvar)
+
+
+# Function to normalize a vector 
 nor <- function(x) {
     (x - min(x))/(max(x) - min(x))
 }
 
+# Creating a normalized dataset with the nor()
 noeq <- data.frame(apply(eqwines[,1:12], 2, nor))
+# adding back the quality and the type vectors
 noeq$quality <- eqwines$quality
 noeq$type <- eqwines$type
+
+# Creating a melted dataset of the normalized data
+# to easily apply facet plots
 noeq.melt <- melt(noeq, id = c('quality', 'type'))
 noall <- data.frame(apply(allwines[,1:12], 2, nor))
 noall$quality <- allwines$quality
 noall$type <- allwines$type
 noall.melt <- melt(noall, id = c('quality', 'type'))
 
-
-
+noeq.melt$variable <- factor(noeq.melt$variable, 
+                             labels = nvar)
+noall.melt$variable <- factor(noall.melt$variable, 
+                             labels = nvar)
 ```
 
-# 1. Introduction <a name="intro"></a>
+<a name="intro"></a>
+
+# 1. Introduction 
   In the following we will be exploring 2 datasets.  Both data sets document the quality of wine and their associated physiochemical properties.  The data sets are divided into red and white wines.  The grape is the Portugese varietal of *Vinho Verde*.  Documentation of the entire study can be found [here](http://www.sciencedirect.com/science/article/pii/S0167923609001377).  Documentation of the data set and its subsequent variables can be found [here](https://s3.amazonaws.com/udacity-hosted-downloads/ud651/wineQualityInfo.txt).
   For the purposes of determining patterns in the overall designation of wine, I combined the 2 datasets and added a categorical variable called `type` which denotes whether the particular iteration is `white` or `red` wines.  This should not impede any analysis of the individual `type` of wine but should streamline the analysis of the relationship of quality to the physiochemical properties of the wine varietal in whole.
   
@@ -65,14 +107,18 @@ noall.melt <- melt(noall, id = c('quality', 'type'))
 
 *Note: After the loading of the datasets, an additional variable, `type`, was added to indicate the type of wine; `Red Wine` for red wine and `White Wine` for white wine.  This was to help identify the type of wine when both datasets were combined.*
 
-  + Red Wine Dimensions
+ + Dimensions
+
 ```{r, echo = F}
-dim(rw)
+kable(data.frame('Type' = c('Red Wine', 
+                            'White Wine'), 
+                 'Observations' = c(dim(rw)[[1]], 
+                                    dim(ww)[[1]]), 
+                 'Variables' = c(dim(rw)[[2]], 
+                                 dim(ww)[[2]])))
 ```
-  + White Wine Dimensions
-```{r, echo = F}
-dim(ww)
-```
+ 
+ 
 **Note:  There are considerably more white wine iterations than there are red wine iterations.  This may or may not make a difference when analyzing the 2 datasets as one.  I have created 2 different combinations, 1 data set is a straight combination of the 2 data sets, the other is a combination of the red wine data set AND the white wine data set of which I randomly chose observations from so the number of observations were equal to the red wine data set.  We will be conducting analysis on both so the type of dataset will be denoted in the title as `Equalized` or `Unequal`.**
   
   + Variables (both datasets have identical covariates)
@@ -80,7 +126,34 @@ dim(ww)
 colnames(rw)
 ```
 *Note: the `X` variable is an index variable and will be removed as it will interfere with the combination of the 2 datasets and is incidentally uneeded.*
-  
+
+**Description of the Variables**
+
+   1 - **fixed acidity**: most acids involved with wine or fixed or nonvolatile (do not evaporate readily)
+
+   2 - **volatile acidity**: the amount of acetic acid in wine, which at too high of levels can lead to an unpleasant, vinegar taste
+
+   3 - **citric acid**: found in small quantities, citric acid can add 'freshness' and flavor to wines
+
+   4 - **residual sugar**: the amount of sugar remaining after fermentation stops, it's rare to find wines with less than 1 gram/liter and wines with greater than 45 grams/liter are considered sweet
+
+   5 - **chlorides**: the amount of salt in the wine
+
+   6 - **free sulfur dioxide**: the free form of $SO_2$ exists in equilibrium between molecular $SO_2$ (as a dissolved gas) and bisulfite ion; it prevents microbial growth and the oxidation of wine
+
+   7 - **total sulfur dioxide**: amount of free and bound forms of $S0_2$; in low concentrations, $SO_2$ is mostly undetectable in wine, but at free $SO_2$ concentrations over 50 ppm, $SO_2$ becomes evident in the nose and taste of wine
+
+   8 - **density**: the density of water is close to that of water depending on the percent alcohol and sugar content
+
+   9 - **pH**: describes how acidic or basic a wine is on a scale from 0 (very acidic) to 14 (very basic); most wines are between 3-4 on the pH scale
+
+   10 - **sulphates**: a wine additive which can contribute to sulfur dioxide gas ($S0_2$) levels, wich acts as an antimicrobial and antioxidant
+
+   11 - **alcohol**: the percent alcohol content of the wine
+
+   Output variable (based on sensory data): 
+   12 - **quality** (score between 0 and 10)
+
   + Summarizations for Red Wines
 ```{r, echo = F}
 summary(rw)
@@ -91,43 +164,94 @@ summary(ww)
 ```
 **When looking at the distributions of the physiochemical properties, you can notice some major outliers on some of the covariates.  Namely, `residual.sugar`, `chlorides`, `sulphates`, and `total.sulfur.dioxide`.  These variables' `max` values are considerably higher than the other parameters while the `mean` and `median` stay within a relatively small range.  If we were to consider this dataset for predictive modeling, it may be beneficial to remove these outliers.  Removing these observations could also increase correlative values between the covariates as well as the `quality` variable.**
 
+***
+
 <a name = "exploration.qual"></a>
-###1.2 Quality Distributions between Red and White Wines
+
+###1.2 Distributions between Red and White Wines
 
 ```{r, echo = F, message = F, fig.width=10, cache = T}
+# Histogram of quality in the equally represented
+# data set
 eqhist <- ggplot(aes(x = quality, fill = type), 
        data = eqwines) + 
     geom_histogram(position = 'dodge', binwidth = 1) + 
     ggtitle('Quality Distribution\nwith Equalized Observations') + 
     labs(fill = 'Wine Type')
+
+# Histogram of quality in the unequally represented
+# dataset
 hist <- ggplot(aes(x = quality, fill = type), 
        data = allwines) + 
     geom_histogram(position = 'dodge', binwidth = 1) + 
     ggtitle('Quality Distribution\nwith Unequal Observations') + 
     labs(fill = 'Wine Type')
+# Display both of the previous graphs side by side
 grid.arrange(hist, eqhist, ncol = 2)
 ```
 
-  + Table of Quality (Unequal Observations)
+####Unequal Observations
+
+#####Red Wine's Table of Quality
 
 ```{r, echo = F}
-print('Red Wines')
-aggregate(allwines$quality, by=list(allwines$type), FUN=table)$x[[1]]
-print('White Wines')
-aggregate(allwines$quality, by=list(allwines$type), FUN=table)$x[[2]]
+data.frame("Quality" = data.frame(table(subset(allwines, type == 'Red Wine')$quality))$Var1, 
+           "Frequency" = data.frame(table(subset(allwines, type == 'Red Wine')$quality))$Freq)
 ```
 
-  + Table of Quality (Equalized Observations)
+#####White Wine's Table of Quality
+    
+```{r, echo = F}
+data.frame("Quality" = data.frame(table(subset(allwines, type == 'White Wine')$quality))$Var1, 
+           "Frequency" = data.frame(table(subset(allwines, type == 'White Wine')$quality))$Freq)
+```
+
+####Equalized Observations
+
+#####Red Wine's Table of Quality
 
 ```{r, echo = F}
-print('Red Wines')
-aggregate(eqwines$quality, by=list(eqwines$type), FUN=table)$x[[1]]
-print('White Wines')
-aggregate(eqwines$quality, by=list(eqwines$type), FUN=table)$x[[2]]
+data.frame("Quality" = data.frame(table(subset(eqwines, type == 'Red Wine')$quality))$Var1, 
+           "Frequency" = data.frame(table(subset(eqwines, type == 'Red Wine')$quality))$Freq)
+```
+
+#####White Wine's Table of Quality
+    
+```{r, echo = F}
+data.frame("Quality" = data.frame(table(subset(eqwines, type == 'White Wine')$quality))$Var1, 
+           "Frequency" = data.frame(table(subset(eqwines, type == 'White Wine')$quality))$Freq)
 ```
 
 
 **Note: The distributions of the outcome variable, `quality`, seem to be normal.**
+
+####Distributions of the Prediction Variables
+
+```{r, echo = F}
+ggplot(aes(x = variable, y = value, fill = type), 
+       data = noeq.melt) + 
+    geom_boxplot() + 
+    labs(fill = 'Wine Type') + 
+    xlab('Physiochemical Properties') + 
+    ylab('Normalized Values') + 
+    ggtitle('Distributions of the\nPhysiochemical Properties\nBy Wine Type') + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+You may notice that the range of the values are between 0-1.  I have normalized all the variables so 0 is the minimum value and 1 is the maximum value.
+
+**My Reasoning for 0-1 Normalization**
+
+  + To concisely represent all the variables and their distributions without having variables of larger scales visually warp the variables of smaller scales.
+  + We are concerned with distribution, and in distribution, the actual values are not as much of a concern so much as the visualizing the distribution of those values within its range
+
+**Things to observe**
+
+ + We immedietely note that there are certain properties that have very small or large distributions depending on the wine type.
+ + Aside from a few properties, the majority of the boxes tend to be at below the median value.  This could indicate that we have some extreme outliers.
+ 
+ 
+***
 
 <a name = 'exploration.rel'></a>
 
@@ -144,9 +268,15 @@ ggplot(aes(y = fixed.acidity + volatile.acidity + citric.acid,
            data = allwines) + 
     geom_jitter(alpha = 3/10) + 
     labs(color = "Wine Type") + 
-    ylab('Total Acidity') + 
+    ylab(expression('Total Acidity ('~g/dm^3~')')) + 
     ggtitle('Relationship of pH\nto Total Acidity') + 
-    geom_smooth()
+    geom_smooth() + 
+  annotate('text', x = 3.2, y = 13, 
+           label = 'Correlation of -0.68', 
+           size = 6) + 
+  annotate('text', x = 3, y = 7, 
+           label = 'Correlation of -0.43', 
+           size = 6)
 ```
 
 For this particular graph I added all the acid indicating components, `fixed.acidity` + `volatile.acidity` + `citric.acid`, as `Total Acidity` and compared it to the `pH` variable.  If the data is sound, `pH` should have an inverse relationship to `Total Acidity`, and it does.
@@ -160,12 +290,20 @@ ggplot(aes(y = fixed.acidity + volatile.acidity + citric.acid,
        data = eqwines) + 
     geom_jitter(alpha = 3/10) + 
     labs(color = "Wine Type") + 
-    ylab('Total Acidity') + 
+    ylab(expression('Total Acidity ('~g/dm^3~')')) + 
     ggtitle('Relationship of pH\nto Total Acidity\nEqualized') + 
-    geom_smooth()
+    geom_smooth() + 
+  annotate('text', x = 3.2, y = 13, 
+           label = 'Correlation of -0.68', 
+           size = 6) + 
+  annotate('text', x = 3, y = 7, 
+           label = 'Correlation of -0.43', 
+           size = 6)
 ```
 
 Although the areas of red wine vs white wine seems to be more distinct, the red wine rate of change is still more rapid than white wine.
+
+***
 
   + Alcohol and Density
 
@@ -179,10 +317,18 @@ ggplot(aes(y = density,
     geom_point() + 
     geom_smooth() + 
     labs(color = "Wine Type") + 
-    xlab('Alcohol %') + 
-    ylab('Density (g/cc)') + 
-    ggtitle('Relationship of Alcohol\nto Density\nEqualized')
+    xlab('Alcohol (%)') + 
+    ylab(expression('Density ('~g/cm^3~')')) + 
+    ggtitle('Relationship of Alcohol\nto Density\nEqualized') + 
+  annotate('text', x = 13, y = 0.997, 
+           label = 'Correlation of -0.50', 
+           size = 6) + 
+  annotate('text', x = 11, y = 0.989,
+           label = 'Correlation of -0.81', 
+           size = 6)
 ```
+
+***
 
 <a name = 'exploration.other'></a>
 
@@ -190,62 +336,256 @@ ggplot(aes(y = density,
 
 In the previous area, we looked at variables that *should* have correlation, whether negative or positive.  There maybe other variables that have such correlations we may not have intuitively examined.
 
-###Correlation of Variables on the Equalized Data Set
+####Correlation of Variables on the Equalized Data Set
   
 ```{r, echo = F, message = F, cache = T}
 corrplot(cor(eqwines[,1:12]))
 ```
 
   As covered in the previous section, there is a strong correlation between `alcohol` and `density`.  But there were, indeed, some correlated variables that have interesting relationships to one another.
-  
-###`pH` to `volatile.acidity`
+
+***
+
+####pH to volatile.acidity
+
+Although the `pH` to `fixed.acidity` and `citric.acid` seem to have a negative correlation, as expected, `pH` seems to also have a positive correlation with `volatile.acidity`, as seen above.  This was unexpected since acidic compounds encompass the lower numbers in the `pH` scale.  Let's take a closer look.
 
 ```{r, echo = F, message = F, cache = T}
 ggplot(aes(x = pH, y = volatile.acidity, color = type), 
        data = eqwines) + 
     geom_jitter() + 
     labs(color = 'Wine Type') + 
-    ylab('Volatile Acidity') + 
+    ylab(expression('Volatile Acidity ('~g/dm^3~')')) + 
     ggtitle('pH to \nVolatile Acidity\nEqualized') + 
     coord_cartesian(xlim = c(min(eqwines$pH), 
                              quantile(eqwines$pH, 0.99)),
                      ylim = c(min(eqwines$volatile.acidity), 
                               quantile(eqwines$volatile.acidity, 0.99))) + 
-  geom_smooth()
+  geom_smooth() + 
+  annotate('text', x = 3.17,y = 0.55,
+           label = 'Correlation of 0.23', 
+           size = 6) + 
+  annotate('text', x = 3.20, y = 0.23,
+           label = 'Correlation of -0.065', 
+           size = 6)
 ```
 
+We immediately notice that there is a positive correlation with `Red Wine` but an almost negative correlation with `White Wine`.  Looking at the table below, we see that the majority of the correlation is attributed from `Red Wine`.
 
-  Although the `pH` to `fixed.acidity` and `citric.acid` seem to have a negative correlation, as expected, `ph` seems to also have a positive correlation with `volatile.acidity`.  This was unexpected since acidic compounds encompass the lower numbers in the `ph` scale.  Doing further research, I have found that `volatile.acidity` in the documentation is also known as acetic acid.  Acetic acid is considered a weak acid, and one of two weak acids.  Weak acids are categorized as such because they simultaneously contain their conjugate base, higher pH, and acidic parts in one solution.  More information can be found [here](http://en.wikipedia.org/wiki/Acid_strength).  This could possibly explain the positive correlation between `pH` and `volatile.acidity`.  
-  
-###`density` to `fixed.acidity`
+  Doing further research, I have found that `volatile.acidity` in the documentation is also known as acetic acid.  Acetic acid is considered a weak acid, and one of two weak acids.  Weak acids are categorized as such because they simultaneously contain their conjugate base, higher pH, and acidic parts in one solution.  More information can be found [here](http://en.wikipedia.org/wiki/Acid_strength).  This could possibly explain the positive correlation between `pH` and `volatile.acidity`.  
+
+***
+
+####density to fixed.acidity
   
 ```{r, echo = F, message = F, chache = T}
 ggplot(aes(x = density, y = fixed.acidity, color = type),
        data = eqwines) + 
     geom_point() + 
     labs(color = 'Wine Type') + 
-    xlab('Density') + 
-    ylab('Fixed Acidity') + 
+    xlab(expression('Density ('~g/cm^3~')')) + 
+    ylab(expression('Fixed Acidity ('~g/dm^3~')')) + 
     ggtitle('Density to\nFixed Acidity\nEqualized') + 
-    geom_smooth()
+    geom_smooth() + 
+  annotate('text', x = 0.999, y = 13,
+           label = 'Correlation of 0.67', 
+           size = 6) + 
+  annotate('text', x = 1, y = 7,
+           label = 'Correlation of 0.28', 
+           size = 6)
 ```
   
   Another high correlation is between `density` and `fixed.acidity`.  The three prime acids found in wine are **tartaric acid**, **malic acid**, and **citric acid**.  When looking at the densities of these acids we find that...
-  
-  + tartaric acid : 1.79 g/cm^3
-  + malic acid : 1.61 g/cm^3
-  + citric acid : 1.67 g/cm^3
-  
-All of these acids have a higher density than water, which has a density of 1.0 g/cm^3.  We are left to conclude that the higher the acid concentration in a given compound relative to water, the more dense it becomes, with all else being equal.
+
+```{r, echo = F}
+kable(data.frame('Acid' = c('Tartaric Acid', 
+                            'Malic Acid', 
+                            'Citric Acid'), 
+                 'Density' = c('1.79 g/cm^3', 
+                               '1.61 g/cm^3', 
+                               '1.67 g/cm^3')))
+```
+
+
+All of these acids have a higher density than water, which has a density of $1.0 g/cm^3$.  We are left to conclude that the higher the acid concentration in a given compound relative to water, the more dense it becomes, with all else being equal.
+
+***
+
+####residual.sugar to total.sulfur.dioxide
+
+There are 2 types of sulfur dioxide, free and bound.  `free.sulfur.dioxide` accounts for the former while `total.sulfur.dioxide` accounts for the combination of free and bound.
+
+```{r, echo = F, message = F, cache = T}
+ggplot(aes(x = residual.sugar, y = total.sulfur.dioxide, color=  type),
+       data = eqwines) + 
+    geom_jitter() +
+    coord_cartesian(xlim = c(min(eqwines$residual.sugar), 
+                              quantile(eqwines$residual.sugar, 0.75)), 
+                     ylim = c(min(eqwines$total.sulfur.dioxide),
+                              quantile(eqwines$total.sulfur.dioxide, 0.75))) + 
+    geom_smooth() + 
+    labs(color = 'Wine Type') + 
+    xlab(expression('Residual Sugar ('~g/dm^3~')')) + 
+    ylab(expression('Total Sulfur Dioxide ('~mg/dm^3~')')) + 
+    ggtitle('Residual Sugar to\nTotal Sulfur Dioxide\nEqualized') + 
+    annotate('text', x = 2, y = 112.5, 
+             label = 'Correlation of 0.41',
+             size = 6) + 
+    annotate('text', x = 2.5, y = 40, 
+             label = 'Correlation of 0.20', 
+             size = 6)  
+```
+
+
+The correlation chart showed a relatively strong correlation between `total.sulfur.dioxide` and `residual.sugar`.  There were no explicit reason for this but some research in their properties did unviel an interesting relation.
+
+`residual.sugar` in the documentation refers to sugar left after fermentation has finished but it also may refer to ordinary table sugar added by producers.
+
+`total.sulfur.dioxide`, or $SO_2$, is a pungent and potent reductant.  Reductants are used often to remove colors from objects in place of bleach.  Natural sugar has a yellowish color to it.  $SO_2$ is  the main agent responsible for removing the yellow color to result in the ordinary table sugar we are familiar with.  This could be a simple coincidence so further research is required. 
+
+***
+
+<a name = 'exploration.out'></a>
+
+###1.5 Quality -- The Outcome Variable
 
 ```{r, echo = F, cache = T, fig.width = 10, fig.height = 10}
-ggplot(aes(x = quality, y = value, color = type),
-       data = noeq.melt) + 
-    geom_jitter() + 
-    facet_wrap(~variable) + 
+ggplot(aes(y = quality, x = value, color = type),
+       data = eq.melt) + 
+#    geom_jitter(alpha = 1/10) + 
+    facet_wrap(~variable, scales = 'free') + 
     labs(color = 'Wine Type') + 
-    ggtitle('Quality Relationship to\nthe Variables\nEqualized') + 
-    scale_x_continuous(breaks = seq(0, max(noall.melt$quality), 1)) + 
-    xlab('Quality Level') + 
-    ylab('Normalized Value')
+    ggtitle('Relationship of Quality to\nthe other Variables\nEqualized') + 
+    scale_y_continuous(breaks = seq(0, max(noall.melt$quality), 1)) + 
+    ylab('Quality Level') + 
+    xlab('Value') + 
+    geom_smooth(method = 'lm', size = 2)
 ```
+
+Applying a regression line to the individual plots give us an idea of how the physiochemical properties may or may not affect the percieved `quality` of the wine.  Here are some observations that are uniform across the different wine types; `White Wine`, `Red Wine`.
+
+  + As expected, as the amount of `volatile.acidity` in wine increases (acetic acid; vinegar flavor), the perceived `quality` decreases
+  + The perceived `quality` of both wines decline as the amount of `chlorides`, or salt, increase.
+    + This type of salt sensitivity in `White Wine` could be because `White Wine` typically lacks the tanins present in `Red Wine`.  Tanins, as well as the color, is derived from the skin of the grape.  For example, Pinot Noir is used both in Champagne, which is white, and in Burgundian Wines, which are red.  The key difference in color is that the skin is not present in Champagne.  more information about tanins can be found [here](http://winery.csu.edu.au/pages/making-wine/the-difference-between-red-and-white.html)
+  + As `density` increases, perceived `quality` declines.  It is unclear, from this examination, how much `density` actually affects `quality` because...
+  + The directly related `alcohol` variable has the opposite effect on `quality` to a very similar degree.  Since we know that `density` is directly related `alcohol`, in that `alcohol` causes change in `density`, it would be more prudent to say that `alcohol` affects **both** `density` and `quality`, or, `density` is a result of `alcohol` and its correlation with `quality` is not evidence of causality.
+  + As `sulphates` increase, so does `quality`.  `sulphates` are used as an antimicrobial, so it would make sense that the more *clean* your wine is, the better it tastes.
+  + `total.sulfur.dioxide` can have a pungent and repelling aroma and it makes sense that in both wines, an increased ammount results in a lower `quality` level.
+
+***
+
+We have looked at physiochemical properties that affect the different types of wines uniformly.  Now let us examine some attributes that have distinct effects on the different types of wine and what we may be able to conclude from it.
+
+####Fixed Acidity's effect on the different types of Wine
+
+```{r, echo = F, message = F}
+ggplot(aes(y = quality, x = fixed.acidity, color = type), 
+       data = eqwines) +  
+    geom_smooth(method = 'lm', size = 1.5) + 
+    labs(color = 'Wine Type') + 
+    ylab('Quality') + 
+    xlab(expression('Fixed Acidity ('~g/dm^3~')')) + 
+    ggtitle("Fixed Acidity's effect\non Quality by Wine Type\nEqualized")
+```
+
+We notice that increased `fixed.acidity` has different effects on the types of wine, strikingly different.
+
+ + As `fixed.acidity` increases in `Red Wine`, the percieved `quality` seems to also increase and the opposite seems to happen with `White Wine`
+  + As stated [here](http://winery.csu.edu.au/pages/making-wine/the-difference-between-red-and-white.html), `Red Wine` tends to contain more tanins which add more biterness and astringent qualities to wine.  This combination of acidity and tanins could be well perceived by wine tasters.
+  +  The lack of tanins in `White Wine` could make the perceived acidity in `White Wine` more apparent and therefore undesired at high levels.
+  + This could explain why wine makers do not seem to produce `White Wine` with `fixed.acidity` beyond $12 g/dm^3$
+
+*Note: This same effect can be observed between `citric.acid` and `quality` but since these relationships are so closely related, the same arguments can be used to justify the patterns.*
+  
+####Residual Sugar's affect on the types of Wine
+
+```{r, echo = F}
+ggplot(aes(x = residual.sugar, y = quality, color = type), 
+       data = eqwines) + 
+    geom_smooth(method = 'lm', size = 1.5) + 
+    labs(color = 'Wine Type') + 
+    xlab(expression('Residual Sugar ('~g/dm^3~')')) + 
+    ylab('Quality') + 
+    ggtitle("Residual Sugar's effect\non Quality by Wine Type\nEqualized")
+```
+
+`residual.sugar` levels have opposite effects on `quality` perceived.  We could imply...
+
+  + The grey areas represent the bulk of the data (25% quantile - 75% quantile).  By the time `residual.sugar` levels get to $15 g/dm^3$ in `Red Wine`, the grey are becomes increasingly large and further away from the regression line.  This could indicate that although the regression line shows the trend of the data, it may not be the most accurate indicator of the relationship between `quality` and `residual.sugar`.  For now we will error on the side that the trend is accurate enough.
+  + `Red Wine`s tendency to have more tanins, and therefore bitterness and astringency, may benefit from more `residual.sugar`
+  + While in `White Wine`, `residual.sugar` may be more apparent and therefore less desired at higher levels.
+  
+  
+####pH's relationship to the different Wine Types
+
+```{r, echo = F}
+ggplot(aes(x = pH, y = quality, color = type), 
+       data = eqwines) + 
+    geom_smooth(method = 'lm', size = 1.5) + 
+    labs(color = 'Wine Type') + 
+    ylab('Quality') + 
+    ggtitle("pH level's effect\non Quality by Wine Type\nEqualized")
+```
+
+As expected, `pH` has the inverse effect on `quality` when compared to `acidity`.  This again reiterates that tasters prefer more acid in `Red Wines` but not in `White Wines`
+
+# 3. Conclusion
+
+<a name = 'conclusion.plots'></a>
+
+###Final Plots
+
+As the outcome variable is concerned, `quality`, there were some distinct relationships I noticed.
+
+####Perception of Acidity
+
+```{r, echo = F}
+ggplot(aes(y = quality, x = fixed.acidity, color = type), 
+       data = eqwines) +  
+    geom_smooth(method = 'lm', size = 1.5) + 
+    labs(color = 'Wine Type') + 
+    ylab('Quality') + 
+    xlab(expression('Fixed Acidity ('~g/dm^3~')')) + 
+    ggtitle("Fixed Acidity's effect\non Quality by Wine Type\nEqualized")
+```
+
+It is a commonly held belief that acid is a needed in wine to pair with food and to enjoy.  Being in the service industry myself, I have heard this many times.  `White Wine` most often is noted to have the perceived quality of acidity.  It was interesting to see that not only in general that `Red Wine` typically contains more acid but also that `White Wine` is negatively percieved when acid increases.
+
+####The Want for more Alcohol
+
+```{r, echo = F}
+ggplot(aes(x = alcohol, y = quality, color = type), 
+       data = eqwines) + 
+    geom_smooth(method = 'lm', size = 1.5) + 
+    labs(color = 'Wine Type') + 
+    xlab('Alcohol (%)') + 
+    ylab('Quality') + 
+    ggtitle('How Alcohol affects\nQuality\nEqualized')
+```
+
+Another widely accepted idea is that `alcohol` diminishes your ability to taste and therefore higher `alcohol` wines are not ideal for pairing with food.  It is interesting to me that when tasting wine, however, that `alcohol` is well recieved.  It could be simply that fact that increased alcohol content lowers the `density` of wine, as we have seen, or people just like higher proof drinks and our palletes are sensitive enough to notice.
+
+####The Typicity of Wine
+
+```{r, echo = F}
+ggplot(aes(x = variable, y = value, fill = type), 
+       data = noeq.melt) + 
+    geom_boxplot() + 
+    labs(fill = 'Wine Type') + 
+    xlab('Physiochemical Properties') + 
+    ylab('Normalized Values') + 
+    ggtitle('Distributions of the\nPhysiochemical Properties\nBy Wine Type') + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+In wine tasting, you will often hear about the *Typicity* of wine.  *Typicity* is defined as "the degree to which a wine reflects its varietal origins, and thus demonstrate the signature characteristics of the grape from which it was produced, i.e., how much a Merlot wine 'tastes like a Merlot'."  Looking at the box-plot, you can see certain properties that have a really small concentration depending on the type of wine.  For example, `residual.sugar`, for `Red Wine`, is highly ocncentrated in a small area.  If we have an abundance of data, like ours, and such a small distribution of a key predictor, it could suggest `Red Wine`s *typicity*.
+
+<a name = 'conclusion.sum'></a>
+
+###Summary
+
+When trying to extrapolate patterns in the physiochemical properties of wine, it is better to look at `Red` and `White` wines seperately.  Even though they share a lot of similar relationships, it is clear that in some cases, what works for one does not work for the other.
+
+I also noticed some redundancy with the variables of choice.  If predictive modeling were of any interest, I would suggest try dimensional reduction techniques.  For example, exploring the possibility of combining `fixed.acidity`, `volatile.acidity`, `citric acid`, and `pH` into a new variable that accurately holds up model integrity while speeding up any randomforest or logistic regression modeling.
+
+All in all, I really enjoyed this assignment and would appreciate some more up to date data sets on this subject matter.  I would also suggest using a more widely familiar varietal, such as Pinot Noir, or maybe a wide list of varietals where the predictors would be the physiochemical properties and the outcome variable would be the type of wine, i.e. Pinot Noir, Cabernet Sauvignon, and Merlot.
